@@ -31,7 +31,7 @@ Usage
     var minifier = require('matts-minifier');
     
     minifier.css({
-      srcPath: 'public/css',
+      srcPath: __dirname + '/public/css',
       filesIn: ['normalize.css', 'application.css'],
       destination: __dirname + '/public/css/all.css'
     }).on('complete', function (code, destination) {
