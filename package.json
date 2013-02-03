@@ -1,12 +1,12 @@
 {
-  "name": "matts-minifier",
+  "name": "mini-fier",
   "version": "1.0.0",
-  "private": true,
   "main": "minifier.js",
   "dependencies": {
     "uglify-js": "2.2.3",
     "less": "1.3.3",
     "utils": "git://github.com/mattlunn/node-util.git",
+    "coffee-script": "1.4.0",
     "sqwish": "git://github.com/ded/sqwish.git#b90295360d4070156edb61f042a4b234573f17b9"
   }
 }
