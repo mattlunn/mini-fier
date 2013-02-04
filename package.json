@@ -8,5 +8,8 @@
     "utils": "git://github.com/mattlunn/node-util.git",
     "coffee-script": "1.4.0",
     "sqwish": "git://github.com/ded/sqwish.git#b90295360d4070156edb61f042a4b234573f17b9"
+  },
+  "scripts": {
+    "test": "node test"
   }
 }
