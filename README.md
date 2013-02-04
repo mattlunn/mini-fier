@@ -63,7 +63,7 @@ be provided using the `maps` extension specified below.
 
 ### `js(options)` (returns `EventEmitter`)
 
-As well as the standard options displayed above, the `css()` method accepts the following
+As well as the standard options displayed above, the `js()` method accepts the following
 additional options:
 
  - `mangle`: Whether variable names should be renamed to be shorter and meaningless. Default is `true`.
