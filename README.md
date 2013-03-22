@@ -112,15 +112,15 @@ SASS or other formats.
  
 Below is the most basic way of using  filters to convert CoffeeScript to JS:
   
-  instance.addFilter('\\.coffee$', function (filename, contents, options, callback) {
-    callback(null, require('coffee-script').compile(contents));
-  });
+    instance.addFilter('\\.coffee$', function (filename, contents, options, callback) {
+      callback(null, require('coffee-script').compile(contents));
+    });
   
-### `removeFilter(string)` (boolean)
+### `removeFilter(string)` (returns `boolean`)
 
 Removes the filter which was added with `string`. Returns a `boolean` depending on whether a filter was found and removed or not.
 
-### `addReader(sring, callback)`
+### `addReader(sring, callback)` 
 
 "Readers" are mini-fiers way of reading in filepaths or URLS. Existing readers are used to read files off the filesystem,
 and to retrieve URLs. It is *unlikely* that you will need to add your own readers, but the option is here should you need it.
@@ -136,19 +136,23 @@ and to retrieve URLs. It is *unlikely* that you will need to add your own reader
  
 Below is the most basic way of using readers to retrieve URLs
   
-  var request = require('request');
+    var request = require('request');
   
-  instance.addReader('^https?://', function (url, options, callback) {
-    request(url, function (err, res, body) {
-      if (err) {
-        callback(err);
-      } else if (res.statusCode !== 200) {
-        callback(new Error('HTTP status code was ' + res.statusCode));
-      } else {
-        callback(null, body)
-      }
+    instance.addReader('^https?://', function (url, options, callback) {
+      request(url, function (err, res, body) {
+        if (err) {
+          callback(err);
+        } else if (res.statusCode !== 200) {
+          callback(new Error('HTTP status code was ' + res.statusCode));
+        } else {
+          callback(null, body)
+        }
+      });
     });
-  });
+    
+### `removeReader(string)` (returns `boolean`)
+
+Removes the reader which was added with `string`. Returns a `boolean` depending on whether a reader was found and removed or not.
 
 ## Testing
 
