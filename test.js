@@ -1,4 +1,4 @@
-var minifier = require('./minifier');
+var minifier = require('./minifier').create();
 var counter = 0;
 
 function test(emitter) {
@@ -20,13 +20,6 @@ function test(emitter) {
 /**
  * JS Tests
  */
-
-// Check single file works.
-test(minifier.js({
-  srcPath: __dirname + '/tests/',
-  fileIn: 'jquery.js',
-  destination: __dirname + '/tests/out/single.min.js'
-}));
 
 // Check multiple files works.
 test(minifier.js({
@@ -58,7 +51,7 @@ test(minifier.css({
 test(minifier.css({
   srcPath: __dirname + '/tests/',
   filesIn: ['normalize.css', 'main.less'],
-  destination: __dirname + '/tests/out/multiple.bun.css'
+  destination: __dirname + '/tests/out/multiple.min.css'
 }));
 
 // Check mangling can be turned off.
@@ -78,3 +71,10 @@ test(minifier.css({
   strict: true
 }));
 
+// Check HTTP
+test(minifier.css({
+  srcPath: __dirname + '/tests/',
+  filesIn: ['strict.css', 'http://fonts.googleapis.com/css?family=Gabriela'],
+  destination: __dirname + '/tests/out/http.css',
+  compress: false
+}));

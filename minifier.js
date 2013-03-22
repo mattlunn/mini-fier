@@ -1,4 +1,5 @@
 var coffee = require('coffee-script');
+var request = require('request');
 var uglify = require('uglify-js');
 var events = require('events');
 var sqwish = require('sqwish');
@@ -8,73 +9,7 @@ var less = require('less');
 var fs = require('fs');
 
 /**
- * Combines array of file paths into one file.
- *
- * @param files The array of filepaths to combine
- * @param prefix Optional. A path to prefix to all filepaths
- * @param map (path, data, next (err, data)). Optional. A filter function which 
- *        can map the contents of a file to something else
- * @param callback (err, data).
- */
-function combine(files, prefix, map, callback) {
-  var str = '';
-
-  switch (arguments.length) {
-    case 2:
-      // Handle where prefix and map have not been specified.
-      callback = prefix;
-      prefix = undefined;
-    case 3:
-      // Handle where prefix has not been specified.
-      if (typeof prefix === "function") {
-        callback = map;
-        map = prefix;
-        prefix = '';
-
-      // Handle where map has not been specified.
-      } else {
-        callback = map;
-        map = undefined;
-      }
-  }
-
-  // Ensure prefix is always a string to make life easier.
-  if (typeof prefix !== "string") {
-    prefix = '';
-  }
-
-  // Ensure map is always a function to make life easier.
-  if (typeof map !== "function") {
-    map = function (_, d, n) {
-      n(null, d);
-    }
-  }
-
-  (function read(i) {
-    if (i < files.length) {
-      fs.readFile(path.join(prefix, files[i]), 'utf8', function (err, data) {
-        if (err) {
-          callback(err);
-        } else {
-          map(files[i], data, function (err, result) {
-            if (err) {
-              callback(err);
-            } else {
-              str += result;
-
-              read(++i);
-            }
-          });
-        }
-      });
-    } else {
-      callback(null, str);
-    }
-  }(0));  
-}
-
-/**
- * Normalize the options provided by the user immediately, to avoid constant 
+ * Normalize the options provided by the user immediately, to avoid constant
  * checking within the application.
  */
 function normalize(options, additional) {
@@ -103,6 +38,57 @@ function normalize(options, additional) {
   return options;
 }
 
+/**
+ * Use case: We have an array of filenames, and "filters" (which are either our
+ * readers or our filters; each of which has a "match" (a RegExp) and a handler
+ * which is called when the match, is a match).
+ *
+ * By passing the files and filter as the first two parameters, this function
+ * asynchronously loops though each file sequentially, and for each finds a
+ * matching filter. It then calls "each(array[i], i, next())" on the matching
+ * element. The final parameter to each is the function to call when each() has
+ * finished processing. callback() is called by our function when it reaches the
+ * end of array. It passes no parameters
+ *
+ * @param array Array of strings to match each filter's "match" to.
+ * @param filters Array of filters; each element must be an object with a "match"
+ *        property, which is a RegExp.
+ * @param each Called when a filter is matched for i. Callback is passed the
+ *        matched string, i, and a callback to call when it has finished processing
+ * @param callback Called when all array elements have been handled. Passed no
+ *        parameters.
+ * @return undefined
+ */
+function filter(array, filters, each, callback) {
+  var slice = [].slice;
+
+  (function next(i) {
+    if (i < array.length) {
+      var curr = array[i];
+
+      for (var j=0;j<filters.length;j++) {
+        if (filters[j].match.test(curr)) {
+          each(filters[j], i, function () {
+            next(++i);
+          });
+
+          break;
+        }
+      }
+    } else {
+      callback();
+    }
+  }(0));
+}
+
+/**
+ * @param destination Where to write "code" to
+ * @param code The code to write to "destination"
+ * @param error Function called if an error occurs. First arg passed will be err string
+ * @param complete Function called when write was successful. code and destination
+ *        are passed (in that order).
+ * @return undefined
+ */
 function save(destination, code, error, complete) {
   if (destination) {
     fs.writeFile(destination, code, 'utf8', function (err) {
@@ -117,24 +103,89 @@ function save(destination, code, error, complete) {
   }
 }
 
-function maps(filename, contents, next) {
-  var ext = path.extname(filename);
+function Minifier() {
+  this._readers = [];
+  this._filters = [];
 
-  if (exports.maps.hasOwnProperty(ext)) {
-    exports.maps[ext].apply(null, arguments);
-  } else {
-    next(null, contents);
-  }
-}
+  // Default Reader which reads the file from disk
+  this.addReader('.', function (file, options, callback) {
+    if (options.srcPath) {
+      file = path.join(options.srcPath, file);
+    }
 
-/**
- * Aside from standard options, css() also accepts:
- *
- * - strict Whether to run sqwish in strict mode (combine duplicate selectors).
- *          default is false. 
- */
-module.exports.css = function (opts) {
+    fs.readFile(file, 'utf8', function (err, data) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, data);
+      }
+    });
+  });
+
+  // Handle HTTP(s) URLS
+  this.addReader('^https?://', function (url, options, callback) {
+    request(url, function (err, res, body) {
+      if (err) {
+        callback(err);
+      } else if (res.statusCode !== 200) {
+        callback(new Error('HTTP status code was ' + res.statusCode));
+      } else {
+        callback(null, body)
+      }
+    });
+  });
+
+  // Default filter which returns the file unchanged
+  this.addFilter('.', function (filename, contents, options, callback) {
+    callback(null, contents);
+  });
+
+  // Compiles LESS files into CSS
+  this.addFilter('\\.less$', function (filename, contents, options, callback) {
+    less.render(contents, function (err, css) {
+      callback(err, css);
+    });
+  });
+
+  // Compiles CoffeeScript into JavaScript.
+  this.addFilter('\\.coffee$', function (filename, contents, options, callback) {
+    callback(null, coffee.compile(contents));
+  });
+};
+
+// Generates "addReader", "addFilter", "removeFilter" and "removeFilter"
+// addReader expects the RegExp to match the filename against, and then the handler
+// to call. The handler will be given the filename, 2nd parameter for filters is
+// the contents, but for the reader, this is omitted. The next parameter is any
+// options provided by the user and then the callback to call. First param of
+// callback must be any errors (or null) and the second parameter should be
+// either the file read in, or the filtered file depending on whether you used
+// addReader or addFilter.
+["Reader", "Filter"].forEach(function (key) {
+  Minifier.prototype['add' + key] = function (match, handler) {
+    this['_' + key.toLowerCase() + 's'].unshift({
+      match: (match instanceof RegExp ? match : new RegExp(match)),
+      handler: handler
+    });
+  };
+
+  Minifier.prototype['remove' + key] = function (match, handler) {
+    var arr = this['_' + key.toLowerCase() + 's'];
+
+    for (var i=0;i<arr.length;i++) {
+      if (arr.match.toString() === match) {
+        arr.splice(i, 1);
+        return true;
+      }
+    }
+
+    return false;
+  };
+});
+
+Minifier.prototype.css = function (options) {
   var emitter = new events.EventEmitter;
+  var contents = [];
 
   function complete(a, b) {
     emitter.emit('complete', a, b);
@@ -144,33 +195,30 @@ module.exports.css = function (opts) {
     emitter.emit('error', reason);
   }
 
-  normalize(opts, {
+  normalize(options, {
     strict: false
   });
 
-  // Bundle all the specified files together
-  combine(opts.filesIn, opts.srcPath, maps, function (err, data) {
+  this._combineAndFilter(options.filesIn, options, function (err, contents) {
     if (err) {
-      error(err);
+      error(err.toString());
     } else {
       // Either minify the bundle, or leave the bundle untouched if compress
       // was set to false.
-      var output = opts.compress ? sqwish.minify(data, opts.strict) : data;
+      var output = options.compress ? sqwish.minify(contents, options.strict) : contents;
 
-      // save() takes care of whether to write to disk, and fires the complete 
+      // save() takes care of whether to write to disk, and fires the complete
       // event.
-      save(opts.destination, output, error, complete);
+      save(options.destination, output, error, complete);
     }
   });
 
   return emitter;
-}
+};
 
-/**
- * js() accepts no additional properties to the standard.
- */
-module.exports.js = function (opts) {
+Minifier.prototype.js = function (options) {
   var emitter = new events.EventEmitter;
+  var contents = [];
 
   function complete(a, b) {
     emitter.emit('complete', a, b);
@@ -180,50 +228,63 @@ module.exports.js = function (opts) {
     emitter.emit('error', reason);
   }
 
-  normalize(opts, {
+  utils.extend(normalize(options, {
     mangle: true
+  }), {
+    fromString: true
   });
 
-  // Ensure that this value isn't overridden
-  opts.fromString = true;
-
-  // Create a bundle from the files specified
-  combine(opts.filesIn, opts.srcPath, maps, function (err, data) {
+  this._combineAndFilter(options.filesIn, options, function (err, contents) {
     if (err) {
-      error(err);
+      error(err.toString());
     } else {
       // We don't want to pass all options to uglifyjs as I don't want to assume
       // its behaviour wont change with a random parameter. "extract" provides a
       // "view" of only the properties we ask for.
-      var output = opts.compress ? uglify.minify(data, utils.extract(opts, [
+      var output = options.compress ? uglify.minify(contents, utils.extract(options, [
         'fromString',
         'mangle'
-      ])).code : data;
+      ])).code : contents;
 
-      // save() takes care of whether to write to disk, and fires the complete 
+      // save() takes care of whether to write to disk, and fires the complete
       // event.
-      save(opts.destination, output, error, complete);
+      save(options.destination, output, error, complete);
     }
   });
 
   return emitter;
-}
+};
 
-/**
- * .ext : function mappings which allow the contents of certain types of files
- * to be changed before they are bundled in to the same file.
- *
- * This is expected to be used for LESS, CoffeeScript, SASS etc, to convert them
- * to their raw CSS/ JS equivilents first
- */
-module.exports.maps = {
-  '.less': function (filename, contents, next) {
-    less.render(contents, function (e, css) {
-      next(e, css);
+Minifier.prototype._combineAndFilter = function (files, options, callback) {
+  var contents = [];
+  var that = this;
+
+  filter(files, this._readers, function (filter, i, next) {
+    filter.handler(files[i], options, function (err, data) {
+
+      if (err) {
+        callback(err);
+      } else {
+        contents.push(data);
+        next();
+      }
     });
-  },
+  }, function () {
+    filter(files, that._filters, function (filter, i, next) {
+      filter.handler(files[i], contents[i], options, function (err, data) {
+        if (err) {
+          callback(err);
+        } else {
+          contents[i] = data;
+          next();
+        }
+      })
+    }, function () {
+      callback(null, contents.join("\n"));
+    });
+  });
+};
 
-  '.coffee': function (filename, contents, next) {
-    next(null, coffee.compile(contents));
-  }
-}
+module.exports.create = function () {
+  return new Minifier();
+};
