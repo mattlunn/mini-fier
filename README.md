@@ -94,6 +94,62 @@ If any `.coffee` files are in the input file list, they will first be compiled t
       console.log("Failed due to " + reason.toString());
     });
 
+### `addFilter(string, callback)`
+
+"filters" are mini-fiers way of converting file contents from one format to another. mini-fier uses filters internally
+to convert LESS and CoffeeScript files to their CSS and JS equivalents. You can extend mini-fier to do the same for
+SASS or other formats.
+
+ - `string`: A string which is converted to a regular expression. Each file (filepath or URL) is tested against each
+ filter until a matching regular expression is found. That filter's callback is then executed.
+
+ - `callback`: Executed when a file matches the provided string. The callback is provided with `(filename, contents, options, next)`,
+ where `filename` is the name of the file matched (path or URL), `contents` is the original state of the file,
+ `options` is the normalized options object passed to either `css()` or `js()`, and `next` is the function to be 
+ executed when you've done with your filtering.
+
+ `next` expects an error object as the first parameter (or `null`), and the filtered file as the second parameter.
+ 
+Below is the most basic way of using  filters to convert CoffeeScript to JS:
+  
+  instance.addFilter('\\.coffee$', function (filename, contents, options, callback) {
+    callback(null, require('coffee-script').compile(contents));
+  });
+  
+### `removeFilter(string)` (boolean)
+
+Removes the filter which was added with `string`. Returns a `boolean` depending on whether a filter was found and removed or not.
+
+### `addReader(sring, callback)`
+
+"Readers" are mini-fiers way of reading in filepaths or URLS. Existing readers are used to read files off the filesystem,
+and to retrieve URLs. It is *unlikely* that you will need to add your own readers, but the option is here should you need it.
+
+ - `string`: A string which is converted to a regular expression. Each file (filepath or URL) is tested against each
+ filter until a matching regular expression is found. That filter's callback is then executed.
+
+ - `callback`: Executed when a file matches the provided string. The callback is provided with `(filename, options, next)`,
+ where `filename` is the name of the file matched (path or URL), `options` is the normalized options object passed to either
+ `css()` or `js()`, and `next` is the function to be executed when you've read in the file appropiately.
+
+ `next` expects an error object as the first parameter (or `null`), and the read-in-file as the second parameter.
+ 
+Below is the most basic way of using readers to retrieve URLs
+  
+  var request = require('request');
+  
+  instance.addReader('^https?://', function (url, options, callback) {
+    request(url, function (err, res, body) {
+      if (err) {
+        callback(err);
+      } else if (res.statusCode !== 200) {
+        callback(new Error('HTTP status code was ' + res.statusCode));
+      } else {
+        callback(null, body)
+      }
+    });
+  });
+
 ## Testing
 
 A very primitive method of testing is available through the `test.js` file. Run using:
