@@ -10,10 +10,17 @@ The worlds simplest, no bullshit CSS/LESS and JS/CoffeeScript minifier/ compress
 
 mini-fier does all of that, and has an easy to use and extensible API.
 
-## Install
+## Install & Setup
 
     npm install git://github.com/mattlunn/mini-fier.git
 
+Create an instance of `minifier` as follows:
+
+    var minifier = require('minifier');
+    var instance = minifier.create();
+    
+`instance` gives you methods such as `css()` and `js()` (which allow you to minify CSS and JS files), and also `addFilter()`,
+`addReader()`, `removeFilter()` and `removeReader()`; lets look at each of them in more detail...
 ## Usage
 
 The `css()` and `js()` API methods share a number of common options:
@@ -22,7 +29,8 @@ The `css()` and `js()` API methods share a number of common options:
 the destination in any way.
 
  - `filesIn`: An array of files you want to compress. If you have only one file, use `fileIn` instead. The
- `css()` method accepts `.css` or `.less` files. The `js()` method accepts `.js` and `.coffee` files.
+ `css()` method accepts `.css` or `.less` files. The `js()` method accepts `.js` and `.coffee` files. HTTP(S) URLs are 
+ accepted, and the response bodys will be included in the combined file.
 
  - `destination`: The final bundled & optionally minified file is written there. Existing files will be overwritten. 
  If no value is provided, the final contents will be accessible *only* as a parameter to your `complete` handler.
@@ -43,7 +51,7 @@ additional options:
  This requires `compress` to be `true`.
 
 If any `.less` files are in the input file list, they will first be compiled to their CSS equivalents. Additional mappings can
-be provided using the `maps` extension specified below.
+be provided using the `addFilter()` extension specified below.
 
     var minifier = require('mini-fier');
     
@@ -68,7 +76,7 @@ additional options:
 
  - `mangle`: Whether variable names should be renamed to be shorter and meaningless. Default is `true`.
 
-If any `.coffee` files are in the input file list, they will first be compiled to their JS equivalents. Additional mappings can be provided using the `maps` extension specified below.
+If any `.coffee` files are in the input file list, they will first be compiled to their JS equivalents. Additional mappings can be provided using the `addFilters` extension specified below.
     
     var minifier = require('mini-fier');
     
@@ -85,29 +93,6 @@ If any `.coffee` files are in the input file list, they will first be compiled t
     }).on('error', function (reason) {
       console.log("Failed due to " + reason.toString());
     });
-
-### `maps` (object)
-
-The `maps` export is an object which maps file extensions to mapping functions. This can be used to
-convert arbitrary file types to valid CSS and JS in the bundling process. `mini-fier`'s internal conversion of 
-`.less` and `.coffee` files to their CSS and JS equivalents makes use of this exact functionality.
-
-As an example, if you were to define your *own* `.less` -> `.css` converter, you would do something
-like this:
-
-    var minifier = require('mini-fier');
-    var less = require('less');
-
-    minifier.maps['.less'] = function (filepath, contents, next) {
-      less.render(contents, function (e, css) {
-        next(e, css);
-      });  
-    };
-
-A filter function gets pass the complete filepath of the current file, the contents of that file
-and a `next` function, which must be called when your conversion is complete. The `next` function
-should be provided with an error object as the first parameter (or `null`) and the new state of the 
-file as the second parameter.
 
 ## Testing
 
