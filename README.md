@@ -53,7 +53,7 @@ additional options:
 If any `.less` files are in the input file list, they will first be compiled to their CSS equivalents. Additional mappings can
 be provided using the `addFilter()` extension specified below.
 
-    var minifier = require('mini-fier');
+    var minifier = require('mini-fier').create();
     
     minifier.css({
       srcPath: __dirname + '/public/css',
@@ -78,7 +78,7 @@ additional options:
 
 If any `.coffee` files are in the input file list, they will first be compiled to their JS equivalents. Additional mappings can be provided using the `addFilters` extension specified below.
     
-    var minifier = require('mini-fier');
+    var minifier = require('mini-fier').create();
     
     minifier.js({
       srcPath: __dirname + '/public/js',
